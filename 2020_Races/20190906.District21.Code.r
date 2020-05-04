@@ -1,57 +1,67 @@
-### Wendy Davis Analysis ###
-### Build District 21
+### Texas's 21st Congressional District
+# ie Wendy Davis vs Chip Roy
 # Date: 5/3/2020
-# Topic: Analysing Wendy Davis's Chances This Fall
+# Topic: Analysing Chip Roy's and Wendy Davis's Chances This Fall
 # Author: Alex Caple, and as always StackOverflow
 
 ### NEEDS MAJOR CLEANING
 
-# This File Assumes That the "20190811.Texas.Congressional.District.r" Data & Packages are already loaded.
+# This File Assumes that the "20190811.Texas.Congressional.District.r" Data & Packages are already loaded.
 # source(here("2020_Races", "20190811.Texas.Congressional.Districts.r"))
 
-# full District
+
+#  Data -------------------------------------------------------------------
+#  * Shapefiles -----------------------------------------------------------
+# * * District 21 Shapes---------------------------------------------------
+# Single Shape of D21
 sf.d21 <- sf.tex.congress %>% filter(District == 21)
 
-sf.tex.congress <- st_transform(sf.tex.congress, crs=st_crs(sf.tex.p18)) # Change CRS To match Precincts
+# Change CRS To match Precincts
+sf.tex.congress <- st_transform(sf.tex.congress, crs=st_crs(sf.tex.p18))
 
-# precinct for full district
+# Pull Out D21 Precints; should ask on Twitter if these are Correct
 sf.d21.p <- st_intersection(sf.tex.p18,
                             sf.tex.congress %>%
                               filter(District == 21))
 
-# Full Counties ~ ~ ~
-sf.tex.congress <- st_transform(sf.tex.congress, crs=st_crs(sf.tex.counties)) # Change CRS to match counties
+# Pull out D21 Counties
+# Change CRS to match counties - shouldn't they just all match now? This is wrong, fix.
+sf.tex.congress <- st_transform(sf.tex.congress, crs=st_crs(sf.tex.counties))
+
+# Highlights Counties of Texas That D21 Touches
 sf.d21.state <- sf.tex.counties %>%
   mutate(Dist.21 = ifelse(CNTY_NM %in% c(st_intersection(sf.tex.counties,
                                                          sf.tex.congress %>%
-                                                           filter(District == 21))$CNTY_NM),
-                          1, 0))
+                                                           filter(District == 21))$CNTY_NM), 1, 0))
 
 # BBOX Creation to Highlight Area - Consider if too large? 
 sf.d21.c.bbox <- st_as_sfc(st_bbox(sf.d21.state %>% filter(Dist.21 == 1)))
 
 
-#subset state to c
+#subset state to D21 Counties in box
 sf.d21.c <- st_intersection(sf.d21.state,
                             sf.d21.c.bbox)
 
-# ggplot() + geom_sf(data=sf.d21.state,
-#                    fill= ifelse(sf.d21.state$Dist.21 == 1, "light grey", "white"),
-#                    color="grey10")+ 
-#   geom_sf(data=sf.d21.c.bbox,
-#           fill=NA,
-#           color="grey10",
-#           size=1.3) + 
-#  geom_sf(data=sf.d21,
-#           fill=NA,
-#           color="black",
-#          size=2) +
-#  geom_sf(data=sf.d21.p,
-#           fill=NA,
-#           color="pink")
+# Test Plot to View all Current Pulled Shapes
+ggplot() + geom_sf(data=sf.d21.state,
+                   fill= ifelse(sf.d21.state$Dist.21 == 1, "light grey", "white"),
+                   color="grey10")+
+  geom_sf(data=sf.d21.c.bbox,
+          fill=NA,
+          color="grey10",
+          size=1.3) +
+ geom_sf(data=sf.d21,
+          fill=NA,
+          color="black",
+         size=2) +
+ geom_sf(data=sf.d21.p,
+          fill=NA,
+          color="pink")
 
 
-### 2016 All P Test Download
+#  * Voting Data for D21 --------------------------------------------------
+
+### Open Elections Data Texas Precint Data - how do we cite and source? Look up!
 git.url <- "https://github.com/openelections/openelections-data-tx/raw/master/2016/20161108__tx__general__precinct.csv"
 temp <- tempfile()
 download.file(git.url, temp)
@@ -59,15 +69,18 @@ tex.p16.full <- read.csv(temp, sep=",")
 head(tex.p16.full)
 unlink(temp)
 
+
+
 ##### HERE ########
 ### NEED TO GO BACK THROUGH THE 2016 PRECINCTS AND YOU'VE CAUGHT UP - 1 HOUR WORK LOST FOR NOT SAVING, THANK GOD FOR HISTORY
+### YEP - NEED TO GO THROUGH AND RECHECK CONNECTION - 453 total precints, are they all here?
 
 table(sf.d21.p$COUNTY)
 ### DATA - SUBSET D21 DATA
-cname = "Uvalde"
+cname = "UVALDE"
 tex.p16.full %>% filter(county == cname) %>% group_by(precinct) %>% summarize(n()) %>% as.data.frame()
+tex.p16.full %>% filter(district == 21)
 sf.tex.p18 %>% filter(COUNTY == toupper(cname)) %>% group_by(PCTKEY) %>% summarize(n()) %>% as.data.frame()
-
 tex.p16.full %>% filter(county == cname) %>% View()
 
 # FINEs still need to be match checked
@@ -108,6 +121,7 @@ test <- sf.tex.p18 %>%
 test$geometry <- NULL
 test <- test %>% distinct(COUNTY, .keep_all = TRUE)
 
+# This brings the County key into the Precinct voting file
 tex.p16.full <- merge(tex.p16.full,
                       test,
                       by.x="county",
@@ -123,7 +137,7 @@ t2$PKEYT <- paste0(t2$CNTY, t2$PT)
 # Ugh its LONG FORM PREC VOTING DATA
 sf.d21.data.p <- merge(sf.d21.p,
                        t2 %>% 
-                         filter(office == "Ballots Cast") %>% 
+                         filter(office == "U.S. House") %>% 
                          select(PKEYT, votes),
                        by.x="PCTKEY",
                        by.y="PKEYT",
@@ -136,6 +150,11 @@ sf.d21.data.p <- sf.d21.data.p %>%
 ggplot() + geom_sf(data=sf.d21.data.p,
                    aes(fill=votes),
                    color="black")
+
+sf.d21.data.p %>% 
+  mutate(Check = ifelse(is.na(votes), 1, 0)) %>% 
+  group_by(Check) %>% 
+  summarize(n())
 
 # ok its bad - needs a lot of cleaning! but we did it! 
 
